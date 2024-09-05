@@ -1,0 +1,27 @@
+{application, grisp_update_packager, [
+    {description, "GRiSP Software Update Packaging Library"},
+    {vsn, "0.1.0"},
+    {registered, []},
+    {applications, [
+        kernel,
+        stdlib,
+        crypto,
+        uuid,
+        termseal
+    ]},
+    {env,[]},
+    {modules, []},
+
+    {licenses, ["Apache-2.0"]},
+    {links, [
+        {"GitHub",
+            "https://github.com/grisp/grisp_update_packager"
+        },
+        {"Changelog",
+            "https://github.com/grisp/grisp_update_packager/blob/main/CHANGELOG.md"
+        },
+        {"Homepage",
+            "https://www.grisp.org"
+        }
+    ]}
+ ]}.
