@@ -1,6 +1,6 @@
 {application, grisp_update_packager, [
     {description, "GRiSP Software Update Packaging Library"},
-    {vsn, "0.1.0"},
+    {vsn, "1.0.0"},
     {registered, []},
     {applications, [
         kernel,

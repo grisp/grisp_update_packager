@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2024-09-06
+
 First release.
 
-[Unreleased]: https://github.com/grisp/grisp_updater_packager/compare/XXX...HEAD
+[Unreleased]: https://github.com/grisp/grisp_update_packager/compare/1.0.0...HEAD
+[1.0.0]: https://github.com/grisp/grisp_update_packager/compare/753d621f36907e3d5676cc0bf0db43276f39c5a6...1.0.0
