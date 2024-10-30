@@ -45,6 +45,7 @@
     tarball => boolean(),
     name := iodata() | undefined,
     version := iodata() | undefined,
+    manifest := term() | undefined,
     description => iodata() | undefined,
     architecture => string() | binary() | undefined,
     block_size => pos_integer(),
@@ -90,6 +91,9 @@
 %%   <li><b>architecture</b> (optional binary):
 %%      The target architecture of the update package.
 %%      Default: `arm-grisp2-rtems'.
+%%   </li>
+%%   <li><b>manifest</b> (optional term):
+%%      An optional software manifest describing the software being packaged.
 %%   </li>
 %%   <li><b>block_size</b> (optional positive integer):
 %%      The size in bytes of the update chunks before compression.
@@ -210,8 +214,10 @@ package(OutputPath0, Opts0) ->
 validate_options(Opts0) ->
     Opts = lists:foldl(fun({Tag, CheckFun, Default},  Map) ->
         case maps:find(Tag, Map) of
-            {ok, Value} when Value =/= undefined ->
+            {ok, Value} when Value =/= undefined, CheckFun =/= undefined ->
                 Map#{Tag => CheckFun(Value)};
+            {ok, Value} when Value =/= undefined ->
+                Map#{Tag => Value};
             _ ->
                 Map#{Tag => Default}
         end
@@ -221,6 +227,7 @@ validate_options(Opts0) ->
         {version, fun check_string/1, undefined},
         {description, fun check_string/1, undefined},
         {architecture, fun check_string/1, ?DEFAULT_ARCHITECTURE},
+        {manifest, undefined, undefined},
         {block_size, fun check_pos_integer/1, ?DEFAULT_BLOCK_SIZE},
         {key_file, fun check_file_exists/1, undefined},
         {key, fun check_private_key/1, undefined},
@@ -460,7 +467,11 @@ save_sealed_manifest(Output, Manifest, #{key := Key}) ->
 create_manifest(Output, Opts) ->
     #{name := Name, architecture := Arch, version := VersionOpt} = Opts,
     Version = parse_version(VersionOpt),
-    RevManifest = structure(Opts) ++ [
+    Manifest = case maps:get(manifest, Opts, undefined) of
+        undefined -> [];
+        Term -> [{manifest, Term}]
+    end,
+    RevManifest = structure(Opts) ++ Manifest ++ [
         {architecture, iolist_to_binary(Arch)},
         {description, unicode:characters_to_binary(maps:get(desc, Opts, ""))},
         {version, Version},
