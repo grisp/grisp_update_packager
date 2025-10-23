@@ -85,12 +85,24 @@
 %%   <li><b>version</b> (required binary):
 %%      The product version that will be specified in the manifest.
 %%   </li>
+%%   <li><b>vcs</b> (optional binary):
+%%      The version control identifier that will be specified in the manifest.
+%%   </li>
+%%   <li><b>uuid</b> (optional binary):
+%%      The software update unique identifier that will be specified in the manifest.
+%%   </li>
+%%   <li><b>author</b> (optional binary):
+%%      The author of the software update that will be specified in the manifest.
+%%   </li>
 %%   <li><b>description</b> (optional binary):
 %%      The product description that will be specified in the manifest.
 %%   </li>
 %%   <li><b>architecture</b> (optional binary):
 %%      The target architecture of the update package.
 %%      Default: `arm-grisp2-rtems'.
+%%   </li>
+%%   <li><b>platform</b> (optional binary):
+%%      The target platform of the update package.
 %%   </li>
 %%   <li><b>manifest</b> (optional term):
 %%      An optional software manifest describing the software being packaged.
@@ -227,8 +239,12 @@ validate_options(Opts0) ->
         {tarball, fun check_boolean/1, true},
         {name, fun check_string/1, undefined},
         {version, fun check_string/1, undefined},
+        {vcs, fun check_string/1, undefined},
+        {uuid, fun check_string/1, undefined},
+        {author, fun check_string/1, undefined},
         {description, fun check_string/1, undefined},
         {architecture, fun check_string/1, ?DEFAULT_ARCHITECTURE},
+        {platform, fun check_string/1, undefined},
         {manifest, undefined, undefined},
         {block_size, fun check_pos_integer/1, ?DEFAULT_BLOCK_SIZE},
         {key_file, fun check_file_exists/1, undefined},
@@ -476,8 +492,12 @@ create_manifest(Output, Opts) ->
     end,
     RevManifest = structure(Opts) ++ Manifest ++ [
         {architecture, iolist_to_binary(Arch)},
-        {description, unicode:characters_to_binary(maps:get(desc, Opts, ""))},
+        {platform, iolist_to_binary(get_defined(platform, Opts, ""))},
+        {description, unicode:characters_to_binary(get_defined(description, Opts, ""))},
         {version, Version},
+        {vcs, iolist_to_binary(get_defined(vcs, Opts, ""))},
+        {uuid, iolist_to_binary(get_defined(uuid, Opts, ""))},
+        {author, iolist_to_binary(get_defined(author, Opts, ""))},
         {product, unicode:characters_to_binary(Name)},
         {format, {1, 0, 0}}
     ],
@@ -486,6 +506,13 @@ create_manifest(Output, Opts) ->
     Objs3 = firmware_objects(Opts, Output, Objs2),
     RevManifest2 = [{objects, lists:reverse(Objs3)} | RevManifest],
     lists:reverse(RevManifest2).
+
+get_defined(Key, Opts, Default) ->
+    case maps:find(Key, Opts) of
+        {ok, undefined} -> Default;
+        {ok, Value} -> Value;
+        error -> Default
+    end.
 
 structure(#{mbr := PartSpecs}) when PartSpecs =/= undefined ->
     [{structure, {mbr, [
