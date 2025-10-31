@@ -23,7 +23,7 @@
 }.
 
 -type mbr_partition() :: #{
-    role := boot | system | data,
+    role := boot | system | data | reserved,
     type => dos | fat | fat32 | undefined, % dos is deprecated
     start => non_neg_integer(),
     size := non_neg_integer()
@@ -32,7 +32,7 @@
 -type mbr_partition_table() :: [mbr_partition()].
 
 -type gpt_partition() :: #{
-    role := boot | system | data,
+    role := boot | system | data | reserved,
     type => linux | swap | home | efi | raid | llvm | bdp | binary() | string(),
     id := iodata(),
     start => non_neg_integer(),
@@ -85,12 +85,24 @@
 %%   <li><b>version</b> (required binary):
 %%      The product version that will be specified in the manifest.
 %%   </li>
+%%   <li><b>vcs</b> (optional binary):
+%%      The version control identifier that will be specified in the manifest.
+%%   </li>
+%%   <li><b>uuid</b> (optional binary):
+%%      The software update unique identifier that will be specified in the manifest.
+%%   </li>
+%%   <li><b>author</b> (optional binary):
+%%      The author of the software update that will be specified in the manifest.
+%%   </li>
 %%   <li><b>description</b> (optional binary):
 %%      The product description that will be specified in the manifest.
 %%   </li>
 %%   <li><b>architecture</b> (optional binary):
 %%      The target architecture of the update package.
 %%      Default: `arm-grisp2-rtems'.
+%%   </li>
+%%   <li><b>platform</b> (optional binary):
+%%      The target platform of the update package.
 %%   </li>
 %%   <li><b>manifest</b> (optional term):
 %%      An optional software manifest describing the software being packaged.
@@ -120,11 +132,11 @@
 %%   </li>
 %%   <li><b>files</b> (optional list):
 %%      A list of extra files to be installed during software update.
-%%      The files will not be chuncked and will be included as a single
-%%      compressed block. If a URL is specified, the file will not be included
-%%      in the update package, instead it will be expected to be available at
-%%      the given external URL, the file is still required locally though,
-%%      as it is needed to compute the hashes.
+%%      Local files are chunked like the system image, using `block_size` and
+%%      per-chunk compression when beneficial. If a URL is specified, the file
+%%      is not included in the update package; instead the manifest contains a
+%%      single reference block pointing to the external URL. The local file is
+%%      still required to compute size and hashes.
 %%      The format of the file specification is a map with the following fields:
 %%      <ul>
 %%        <li><b>name</b> (required binary):
@@ -149,8 +161,9 @@
 %%      the following fields:
 %%      <ul>
 %%        <li><b>role</b> (required atom):
-%%          The role of the partition, could be `boot', `system' or `data'.
-%%          The firmware can only be written to a `system' partition.
+%%          The role of the partition, could be `boot', `system', `data' or
+%%          `reserved'. The firmware can only be written to a `system'
+%%          partition.
 %%        </li>
 %%        <li><b>type</b> (optional atom):
 %%          The type of the partition, can be `fat', `fat32' or `dos',
@@ -174,8 +187,9 @@
 %%      the following fields:
 %%      <ul>
 %%        <li><b>role</b> (required atom):
-%%          The role of the partition, could be `boot', `system' or `data'.
-%%          The firmware can only be written to a `system' partition.
+%%          The role of the partition, could be `boot', `system', `data' or
+%%          `reserved'. The firmware can only be written to a `system'
+%%          partition.
 %%        </li>
 %%        <li><b>type</b> (optional atom or binary):
 %%          The type of the partition, can be one of the atoms `linux', `swap',
@@ -225,8 +239,12 @@ validate_options(Opts0) ->
         {tarball, fun check_boolean/1, true},
         {name, fun check_string/1, undefined},
         {version, fun check_string/1, undefined},
+        {vcs, fun check_string/1, undefined},
+        {uuid, fun check_string/1, undefined},
+        {author, fun check_string/1, undefined},
         {description, fun check_string/1, undefined},
         {architecture, fun check_string/1, ?DEFAULT_ARCHITECTURE},
+        {platform, fun check_string/1, undefined},
         {manifest, undefined, undefined},
         {block_size, fun check_pos_integer/1, ?DEFAULT_BLOCK_SIZE},
         {key_file, fun check_file_exists/1, undefined},
@@ -329,7 +347,7 @@ check_mbr_partitions([], _, Acc) -> lists:reverse(Acc);
 check_mbr_partitions([#{role := Role0, start := Start0,
                         size := Size0} = Part | Rest], Min, Acc) ->
     Role = case Role0 of
-        R when R =:= boot; R =:= system; R =:= data -> R;
+        R when R =:= boot; R =:= system; R =:= data; R =:= reserved -> R;
         O -> throw({bad_partition_role, O})
     end,
     Type = case maps:get(type, Part, fat) of
@@ -361,7 +379,7 @@ check_gpt_partitions([#{role := Role0, type := Type0, id := Id0,
                         start := Start0, size := Size0} | Rest],
                      Min, Acc) ->
     Role = case Role0 of
-        R when R =:= boot; R =:= system; R =:= data -> R;
+        R when R =:= boot; R =:= system; R =:= data; R =:= reserved -> R;
         O -> throw({bad_partition_role, O})
     end,
     Type = check_uuid(gpt_type(Type0)),
@@ -381,6 +399,7 @@ check_gpt_partitions([#{role := _, type := _, id := _, size := _} = Part | Rest]
 check_gpt_partitions([Part | _Rest], _Min, _Acc) ->
     throw({bad_gpt_partition, Part}).
 
+gpt_type(reserved) -> "8da63339-0007-60c0-c436-083ac8230908"; % Linux reserved
 gpt_type(linux) -> "0fc63daf-8483-4772-8e79-3d69d8477de4"; % Linux Filesytem
 gpt_type(swap) -> "0657fd6d-a4ab-43c4-84e5-0933c84b4f4f"; % Linux Swap
 gpt_type(home) -> "933ac7e1-2eb4-4f13-b844-0e14e2aef915"; % Linux home
@@ -473,8 +492,12 @@ create_manifest(Output, Opts) ->
     end,
     RevManifest = structure(Opts) ++ Manifest ++ [
         {architecture, iolist_to_binary(Arch)},
-        {description, unicode:characters_to_binary(maps:get(desc, Opts, ""))},
+        {platform, iolist_to_binary(get_defined(platform, Opts, ""))},
+        {description, unicode:characters_to_binary(get_defined(description, Opts, ""))},
         {version, Version},
+        {vcs, iolist_to_binary(get_defined(vcs, Opts, ""))},
+        {uuid, iolist_to_binary(get_defined(uuid, Opts, ""))},
+        {author, iolist_to_binary(get_defined(author, Opts, ""))},
         {product, unicode:characters_to_binary(Name)},
         {format, {1, 0, 0}}
     ],
@@ -484,12 +507,19 @@ create_manifest(Output, Opts) ->
     RevManifest2 = [{objects, lists:reverse(Objs3)} | RevManifest],
     lists:reverse(RevManifest2).
 
-structure(#{mbr := PartSpecs}) ->
+get_defined(Key, Opts, Default) ->
+    case maps:find(Key, Opts) of
+        {ok, undefined} -> Default;
+        {ok, Value} -> Value;
+        error -> Default
+    end.
+
+structure(#{mbr := PartSpecs}) when PartSpecs =/= undefined ->
     [{structure, {mbr, [
         {sector_size, 512},
         {partitions,  partitions_mbr(PartSpecs, 0, [])}
     ]}}];
-structure(#{gpt := PartSpecs}) ->
+structure(#{gpt := PartSpecs}) when PartSpecs =/= undefined ->
     [{structure, {gpt, [
         {sector_size, 512},
         {partitions,  partitions_gpt(PartSpecs, 0, [])}
@@ -562,7 +592,7 @@ system_objects(#{files := SysFileSpecs} = Opts, _Output, Objs) ->
 
 system_objects(_Opts, _Output, [], Objs) ->
     Objs;
-system_objects(Opts, Output, [#{url := Url} = Spec | Rest], Objs) ->
+system_objects(Opts, Output, [#{url := Url} = Spec | Rest], Objs) when Url =/= undefined ->
     #{name := Name, local := Local, target := Target} = Spec,
     Blocks = generate_refblocks(Opts, Local, Url),
     Objs2 = [{binary_to_atom(Name), [
@@ -634,7 +664,7 @@ generate_blocks(#{block_size := Size}, Output, InputFilename, SubDir) ->
             generate_blocks_loop(Output, Size, File, SubDir, 0, 0, #{}, []);
         {error, Reason} ->
             throw({open_error, InputFilename, Reason})
-    end. 
+    end.
 
 generate_blocks_loop(Output, ReadSize, File, SubDir, Index, Offset, Cache, Blocks) ->
     case file:read(File, ReadSize) of
