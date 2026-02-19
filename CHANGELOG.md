@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-02-19
+
+### Added
+
+- Support `reserved` as a partition role in MBR/GPT structures, including GPT
+  type mapping for Linux reserved partitions
+- Add manifest metadata fields: `vcs`, `uuid`, `author`, and `platform`
+
 ## [1.0.1] - 2025-05-22
 
 ### Changes
@@ -17,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 First release.
 
-[Unreleased]: https://github.com/grisp/grisp_update_packager/compare/1.0.1...HEAD
+[Unreleased]: https://github.com/grisp/grisp_update_packager/compare/1.0.2...HEAD
+[1.0.2]: https://github.com/grisp/grisp_update_packager/compare/1.0.1...1.0.2
 [1.0.1]: https://github.com/grisp/grisp_update_packager/compare/1.0.0...1.0.1
 [1.0.0]: https://github.com/grisp/grisp_update_packager/compare/753d621f36907e3d5676cc0bf0db43276f39c5a6...1.0.0
